@@ -1,0 +1,117 @@
+<Window x:Class="EnvironmentSpanner.Views.ListEditorDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:ui="http://schemas.modernwpf.com/2019"
+        mc:Ignorable="d"
+        Title="Edit List Values" 
+        MinHeight="450" MinWidth="500"
+        Height="550" Width="600"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize"
+        ui:WindowHelper.UseModernWindowStyle="True"
+        Icon="{StaticResource AppIcon}">
+    <Window.Resources>
+        <Style TargetType="ListBoxItem">
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Margin" Value="2"/>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="15">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" 
+                   Text="{Binding VariableName, StringFormat='Editing: {0}'}" 
+                   FontSize="16"
+                   FontWeight="SemiBold" 
+                   Margin="0,0,0,5"/>
+
+        <Separator Grid.Row="1" Margin="0,0,0,15"/>
+
+        <Border Grid.Row="2" 
+                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                BorderThickness="1"
+                CornerRadius="4"
+                Margin="0,0,0,15"
+                Padding="2">
+            <ListBox x:Name="ItemsListBox" 
+                     ItemsSource="{Binding Items}" 
+                     SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding}" 
+                                   TextWrapping="NoWrap"
+                                   TextTrimming="CharacterEllipsis"
+                                   ToolTip="{Binding}"/>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+
+        <Grid Grid.Row="3" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0" 
+                     x:Name="EditTextBox" 
+                     Text="{Binding EditText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                     Margin="0,0,8,0" 
+                     Padding="8,6"
+                     VerticalContentAlignment="Center"
+                     MinHeight="32"/>
+            <Button Grid.Column="1" 
+                    Content="Update" 
+                    Command="{Binding UpdateItemCommand}"
+                    Padding="15,6"
+                    MinWidth="80"
+                    MinHeight="32"/>
+        </Grid>
+
+        <StackPanel Grid.Row="4" 
+                    Orientation="Horizontal" 
+                    HorizontalAlignment="Right" 
+                    Margin="0,0,0,15">
+            <Button Content="Add Item" 
+                    Command="{Binding AddItemCommand}" 
+                    Margin="0,0,8,0" 
+                    Padding="12,6"
+                    MinHeight="32"/>
+            <Button Content="Remove Selected" 
+                    Command="{Binding RemoveItemCommand}" 
+                    Padding="12,6"
+                    MinHeight="32"/>
+        </StackPanel>
+
+        <Separator Grid.Row="5" Margin="0,0,0,15"/>
+
+        <StackPanel Grid.Row="6" 
+                    Orientation="Horizontal" 
+                    HorizontalAlignment="Right">
+            <Button Content="OK" 
+                    IsDefault="True" 
+                    Command="{Binding OkCommand}" 
+                    Margin="0,0,8,0" 
+                    Padding="20,8"
+                    MinWidth="100"
+                    MinHeight="36"/>
+            <Button Content="Cancel" 
+                    IsCancel="True" 
+                    Command="{Binding CancelCommand}" 
+                    Padding="20,8"
+                    MinWidth="100"
+                    MinHeight="36"/>
+        </StackPanel>
+    </Grid>
+</Window>
