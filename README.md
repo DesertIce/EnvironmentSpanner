@@ -1,4 +1,4 @@
-# EnvironmentSpanner
+# Environment Spanner
 
 A modern WPF application for managing Windows environment variables with a clean, dark-themed interface.
 
