@@ -336,4 +336,147 @@ public class ListEditorViewModelTests
 
         Assert.False(viewModel.IsReviewingDuplicates);
     }
+
+    [Fact]
+    public void ApplyDuplicateCleanupCommand_RemovesOnlyMarkedInstancesInOrder()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;Two;One;Three;One");
+        viewModel.ReviewDuplicatesCommand.Execute(null);
+        var kept = viewModel.Items[0];
+
+        viewModel.ApplyDuplicateCleanupCommand.Execute(null);
+
+        Assert.Equal(["One", "Two", "Three"], viewModel.Items.Select(item => item.Value));
+        Assert.Same(kept, viewModel.Items[0]);
+        Assert.False(viewModel.IsReviewingDuplicates);
+        Assert.True(viewModel.CanUndoDuplicateCleanup);
+        Assert.Equal("Removed 2 duplicate entries.", viewModel.CleanupResultMessage);
+    }
+
+    [Fact]
+    public void ApplyDuplicateCleanupCommand_CanKeepALaterOccurrence()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;One;Two");
+        var first = viewModel.Items[0];
+        var second = viewModel.Items[1];
+        viewModel.ReviewDuplicatesCommand.Execute(null);
+        var occurrences = viewModel.CurrentDuplicateGroup!.Occurrences;
+        viewModel.ToggleReviewRemovalCommand.Execute(occurrences[1]);
+        viewModel.ToggleReviewRemovalCommand.Execute(occurrences[0]);
+
+        viewModel.ApplyDuplicateCleanupCommand.Execute(null);
+
+        Assert.DoesNotContain(viewModel.Items, item => ReferenceEquals(item, first));
+        Assert.Same(second, viewModel.Items[0]);
+        Assert.Contains(viewModel.SelectedItem!, viewModel.Items);
+    }
+
+    [Fact]
+    public void UndoDuplicateCleanupCommand_RestoresInstancesAtPriorPositions()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;Two;One;Three;One");
+        var original = viewModel.Items.ToArray();
+        viewModel.ReviewDuplicatesCommand.Execute(null);
+        viewModel.ApplyDuplicateCleanupCommand.Execute(null);
+
+        viewModel.UndoDuplicateCleanupCommand.Execute(null);
+
+        Assert.Equal(original.Select(item => item.Id), viewModel.Items.Select(item => item.Id));
+        Assert.Equal([0, 1, 2, 3, 4], viewModel.Items.Select(item => item.Position));
+        Assert.False(viewModel.CanUndoDuplicateCleanup);
+    }
+
+    [Theory]
+    [InlineData("add")]
+    [InlineData("update")]
+    [InlineData("remove")]
+    public void NextOrdinaryMutation_InvalidatesCleanupUndo(string mutation)
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;One;Two");
+        viewModel.ReviewDuplicatesCommand.Execute(null);
+        viewModel.ApplyDuplicateCleanupCommand.Execute(null);
+
+        switch (mutation)
+        {
+            case "add":
+                viewModel.AddItemCommand.Execute(null);
+                break;
+            case "update":
+                viewModel.SelectedItem = viewModel.Items[0];
+                viewModel.EditText = "Changed";
+                viewModel.UpdateItemCommand.Execute(null);
+                break;
+            case "remove":
+                viewModel.SelectedItem = viewModel.Items[0];
+                viewModel.RemoveItemCommand.Execute(null);
+                break;
+        }
+
+        Assert.False(viewModel.CanUndoDuplicateCleanup);
+    }
+
+    [Fact]
+    public void Cancel_AfterAppliedCleanup_RestoresOriginalValue()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;One;Two");
+        viewModel.ReviewDuplicatesCommand.Execute(null);
+        viewModel.ApplyDuplicateCleanupCommand.Execute(null);
+
+        viewModel.Cancel();
+
+        Assert.Equal("One;One;Two", viewModel.GetResultValue());
+        Assert.False(viewModel.CanUndoDuplicateCleanup);
+        Assert.False(viewModel.IsReviewingDuplicates);
+    }
+
+    [Fact]
+    public void ApplyDuplicateCleanupCommand_WithKeepAll_CannotExecute()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;One");
+        viewModel.ReviewDuplicatesCommand.Execute(null);
+        viewModel.KeepAllCurrentGroupCommand.Execute(null);
+
+        Assert.False(viewModel.ApplyDuplicateCleanupCommand.CanExecute(null));
+        Assert.Equal("One;One", viewModel.GetResultValue());
+    }
+
+    [Fact]
+    public void ApplyDuplicateCleanupCommand_RequiresFinalReviewGroup()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;One;Two;Two");
+        viewModel.ReviewDuplicatesCommand.Execute(null);
+
+        Assert.False(viewModel.ApplyDuplicateCleanupCommand.CanExecute(null));
+
+        viewModel.NextDuplicateGroupCommand.Execute(null);
+
+        Assert.True(viewModel.ApplyDuplicateCleanupCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void Initialize_AfterReview_RefreshesDerivedReviewState()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;One;Two;Two");
+        viewModel.ReviewDuplicatesCommand.Execute(null);
+        var changedProperties = new List<string?>();
+        var applyCanExecuteChanged = 0;
+        viewModel.PropertyChanged += (_, args) => changedProperties.Add(args.PropertyName);
+        viewModel.ApplyDuplicateCleanupCommand.CanExecuteChanged +=
+            (_, _) => applyCanExecuteChanged++;
+
+        viewModel.Initialize("PATH", "Three;Four");
+
+        Assert.Contains(nameof(viewModel.ReviewProgressText), changedProperties);
+        Assert.Contains(nameof(viewModel.PendingRemovalCount), changedProperties);
+        Assert.Contains(nameof(viewModel.CleanupPreviewText), changedProperties);
+        Assert.True(applyCanExecuteChanged > 0);
+    }
 }

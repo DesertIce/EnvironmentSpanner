@@ -20,6 +20,9 @@ public partial class ListEditorViewModel : ObservableObject
 
     private string _originalValue = string.Empty;
     private int _nextEntryId;
+    private List<RemovedEntry>? _lastCleanup;
+
+    private sealed record RemovedEntry(ListEntryViewModel Entry, int Index);
 
     public ICommand OkCommand { get; set; } = null!;
     public ICommand CancelCommand { get; set; } = null!;
@@ -46,6 +49,12 @@ public partial class ListEditorViewModel : ObservableObject
 
     [ObservableProperty]
     private string reviewConstraintMessage = string.Empty;
+
+    [ObservableProperty]
+    private bool canUndoDuplicateCleanup;
+
+    [ObservableProperty]
+    private string cleanupResultMessage = string.Empty;
 
     public string ReviewProgressText =>
         CurrentDuplicateGroup is null
@@ -76,6 +85,11 @@ public partial class ListEditorViewModel : ObservableObject
         _originalValue = value;
         Items.Clear();
         _nextEntryId = 0;
+        IsReviewingDuplicates = false;
+        CurrentDuplicateGroupIndex = -1;
+        CurrentDuplicateGroup = null;
+        ReviewConstraintMessage = string.Empty;
+        InvalidateCleanupUndo();
 
         if (!string.IsNullOrEmpty(value))
         {
@@ -89,6 +103,7 @@ public partial class ListEditorViewModel : ObservableObject
         SelectedItem = Items.FirstOrDefault();
         AnalyzeDuplicates();
         RemoveItemCommand.NotifyCanExecuteChanged();
+        NotifyReviewStateChanged();
     }
 
     [RelayCommand]
@@ -99,6 +114,7 @@ public partial class ListEditorViewModel : ObservableObject
             CancelDuplicateReview();
         }
 
+        InvalidateCleanupUndo();
         Items.Add(new ListEntryViewModel(_nextEntryId++, Items.Count, "New Item"));
         SelectedItem = Items.LastOrDefault();
         AnalyzeDuplicates();
@@ -121,6 +137,7 @@ public partial class ListEditorViewModel : ObservableObject
                 return;
             }
 
+            InvalidateCleanupUndo();
             Items.RemoveAt(index);
             RefreshPositions();
             AnalyzeDuplicates();
@@ -160,6 +177,7 @@ public partial class ListEditorViewModel : ObservableObject
 
         if (SelectedItem is not null && !string.IsNullOrWhiteSpace(EditText))
         {
+            InvalidateCleanupUndo();
             SelectedItem.Value = EditText;
             EditText = SelectedItem.Value;
             AnalyzeDuplicates();
@@ -250,6 +268,78 @@ public partial class ListEditorViewModel : ObservableObject
         NotifyReviewStateChanged();
     }
 
+    [RelayCommand(CanExecute = nameof(CanApplyDuplicateCleanup))]
+    private void ApplyDuplicateCleanup()
+    {
+        var selectedIndex = SelectedItem is null ? -1 : Items.IndexOf(SelectedItem);
+        var removals = DuplicateGroups
+            .SelectMany(group => group.Occurrences)
+            .Where(item => item.IsMarkedForRemoval)
+            .Select(item => new RemovedEntry(item.Entry, Items.IndexOf(item.Entry)))
+            .Where(removed => removed.Index >= 0)
+            .OrderBy(removed => removed.Index)
+            .ToList();
+
+        if (removals.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var removal in removals.OrderByDescending(item => item.Index))
+        {
+            Items.RemoveAt(removal.Index);
+        }
+
+        if (SelectedItem is not null &&
+            removals.Any(item => ReferenceEquals(item.Entry, SelectedItem)))
+        {
+            SelectedItem = Items.Count == 0
+                ? null
+                : Items[Math.Min(selectedIndex, Items.Count - 1)];
+        }
+
+        _lastCleanup = removals;
+        CanUndoDuplicateCleanup = true;
+        CleanupResultMessage =
+            $"Removed {removals.Count} duplicate " +
+            $"{(removals.Count == 1 ? "entry" : "entries")}.";
+        IsReviewingDuplicates = false;
+        CurrentDuplicateGroupIndex = -1;
+        CurrentDuplicateGroup = null;
+        RefreshPositions();
+        AnalyzeDuplicates();
+        UndoDuplicateCleanupCommand.NotifyCanExecuteChanged();
+        NotifyReviewStateChanged();
+    }
+
+    private bool CanApplyDuplicateCleanup() =>
+        IsReviewingDuplicates &&
+        CurrentDuplicateGroupIndex == DuplicateGroupCount - 1 &&
+        PendingRemovalCount > 0;
+
+    [RelayCommand(CanExecute = nameof(CanUndoCleanup))]
+    private void UndoDuplicateCleanup()
+    {
+        if (_lastCleanup is null)
+        {
+            return;
+        }
+
+        foreach (var removal in _lastCleanup.OrderBy(item => item.Index))
+        {
+            Items.Insert(removal.Index, removal.Entry);
+        }
+
+        _lastCleanup = null;
+        CanUndoDuplicateCleanup = false;
+        CleanupResultMessage = string.Empty;
+        RefreshPositions();
+        AnalyzeDuplicates();
+        UndoDuplicateCleanupCommand.NotifyCanExecuteChanged();
+    }
+
+    private bool CanUndoCleanup() => CanUndoDuplicateCleanup;
+
     public void Cancel() => Initialize(VariableName, _originalValue);
 
     public string GetResultValue() =>
@@ -304,5 +394,14 @@ public partial class ListEditorViewModel : ObservableObject
         ReviewDuplicatesCommand.NotifyCanExecuteChanged();
         PreviousDuplicateGroupCommand.NotifyCanExecuteChanged();
         NextDuplicateGroupCommand.NotifyCanExecuteChanged();
+        ApplyDuplicateCleanupCommand.NotifyCanExecuteChanged();
+    }
+
+    private void InvalidateCleanupUndo()
+    {
+        _lastCleanup = null;
+        CanUndoDuplicateCleanup = false;
+        CleanupResultMessage = string.Empty;
+        UndoDuplicateCleanupCommand.NotifyCanExecuteChanged();
     }
 }
