@@ -25,90 +25,253 @@
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <TextBlock Grid.Row="0" 
-                   Text="{Binding VariableName, StringFormat='Editing: {0}'}" 
+        <TextBlock Grid.Row="0"
+                   Text="{Binding VariableName, StringFormat='Editing: {0}'}"
                    FontSize="16"
-                   FontWeight="SemiBold" 
+                   FontWeight="SemiBold"
                    Margin="0,0,0,5"/>
 
         <Separator Grid.Row="1" Margin="0,0,0,15"/>
 
-        <Border Grid.Row="2" 
-                BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
-                BorderThickness="1"
-                CornerRadius="4"
-                Margin="0,0,0,15"
-                Padding="2">
-            <ListBox x:Name="ItemsListBox" 
-                     ItemsSource="{Binding Items}" 
-                     SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
-                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
-                     ScrollViewer.VerticalScrollBarVisibility="Auto">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding Value}"
-                                   TextWrapping="NoWrap"
-                                   TextTrimming="CharacterEllipsis"
-                                   ToolTip="{Binding Value}"/>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
-        </Border>
+        <Grid Grid.Row="2">
+            <Grid>
+                <Grid.Style>
+                    <Style TargetType="Grid">
+                        <Setter Property="Visibility" Value="Visible"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsReviewingDuplicates}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Grid.Style>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-        <Grid Grid.Row="3" Margin="0,0,0,10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <TextBox Grid.Column="0" 
-                     x:Name="EditTextBox" 
-                     Text="{Binding EditText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
-                     Margin="0,0,8,0" 
-                     Padding="8,6"
-                     VerticalContentAlignment="Center"
-                     MinHeight="32"/>
-            <Button Grid.Column="1" 
-                    Content="Update" 
-                    Command="{Binding UpdateItemCommand}"
-                    Padding="15,6"
-                    MinWidth="80"
-                    MinHeight="32"/>
+                <Border Grid.Row="0"
+                        Visibility="{Binding HasDuplicates,
+                                             Converter={StaticResource BooleanToVisibilityConverter}}"
+                        BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="10"
+                        Margin="0,0,0,10">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right"
+                                Content="Review duplicates"
+                                Command="{Binding ReviewDuplicatesCommand}"
+                                Click="OnReviewNavigationClick"
+                                Padding="12,6"
+                                AutomationProperties.Name="Review duplicate list entries"/>
+                        <TextBlock Text="{Binding DuplicateSummary}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,12,0"/>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Row="1"
+                        Visibility="{Binding CanUndoDuplicateCleanup,
+                                             Converter={StaticResource BooleanToVisibilityConverter}}"
+                        BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="10"
+                        Margin="0,0,0,10">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right"
+                                Content="Undo duplicate cleanup"
+                                Command="{Binding UndoDuplicateCleanupCommand}"
+                                Padding="12,6"
+                                AutomationProperties.Name="Undo the last duplicate cleanup"/>
+                        <TextBlock Text="{Binding CleanupResultMessage}"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,12,0"
+                                   AutomationProperties.LiveSetting="Polite"/>
+                    </DockPanel>
+                </Border>
+
+                <Border Grid.Row="2"
+                        BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Margin="0,0,0,15"
+                        Padding="2">
+                    <ListBox x:Name="ItemsListBox"
+                             ItemsSource="{Binding Items}"
+                             SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <DockPanel>
+                                    <TextBlock DockPanel.Dock="Right"
+                                               Text="Duplicate"
+                                               Margin="12,0,0,0"
+                                               FontWeight="SemiBold"
+                                               Visibility="{Binding IsDuplicate,
+                                                    Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                    <TextBlock Text="{Binding Value}"
+                                               TextWrapping="NoWrap"
+                                               TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding Value}"/>
+                                </DockPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Border>
+
+                <Grid Grid.Row="3" Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0"
+                             x:Name="EditTextBox"
+                             Text="{Binding EditText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                             Margin="0,0,8,0"
+                             Padding="8,6"
+                             VerticalContentAlignment="Center"
+                             MinHeight="32"/>
+                    <Button Grid.Column="1"
+                            Content="Update"
+                            Command="{Binding UpdateItemCommand}"
+                            Padding="15,6"
+                            MinWidth="80"
+                            MinHeight="32"/>
+                </Grid>
+
+                <StackPanel Grid.Row="4"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            Margin="0,0,0,15">
+                    <Button Content="Add Item"
+                            Command="{Binding AddItemCommand}"
+                            Margin="0,0,8,0"
+                            Padding="12,6"
+                            MinHeight="32"/>
+                    <Button Content="Remove Selected"
+                            Command="{Binding RemoveItemCommand}"
+                            Padding="12,6"
+                            MinHeight="32"/>
+                </StackPanel>
+            </Grid>
+
+            <Grid Visibility="{Binding IsReviewingDuplicates,
+                                      Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <DockPanel Grid.Row="0" Margin="0,0,0,10">
+                    <TextBlock Text="{Binding ReviewProgressText}"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding ReviewConstraintMessage}"
+                               Margin="12,0,0,0"
+                               AutomationProperties.LiveSetting="Assertive"/>
+                </DockPanel>
+
+                <Border Grid.Row="1"
+                        BorderBrush="{DynamicResource SystemControlForegroundBaseMediumLowBrush}"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="4">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto">
+                        <ItemsControl x:Name="ReviewOccurrences"
+                                      ItemsSource="{Binding CurrentDuplicateGroup.Occurrences}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <CheckBox IsChecked="{Binding IsMarkedForRemoval, Mode=OneWay}"
+                                              Command="{Binding DataContext.ToggleReviewRemovalCommand,
+                                                  RelativeSource={RelativeSource AncestorType=Window}}"
+                                              CommandParameter="{Binding}"
+                                              Padding="8,6"
+                                              AutomationProperties.Name="{Binding Entry.DisplayPosition,
+                                                  StringFormat='Remove entry at position {0}'}"
+                                              AutomationProperties.HelpText="{Binding Entry.Value}">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="{Binding Entry.DisplayPosition,
+                                                StringFormat='Position {0}:'}"
+                                                       Margin="0,0,8,0"/>
+                                            <TextBlock Text="{Binding Entry.Value}"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       ToolTip="{Binding Entry.Value}"/>
+                                        </StackPanel>
+                                    </CheckBox>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+
+                <StackPanel Grid.Row="2"
+                            Orientation="Horizontal"
+                            Margin="0,10,0,10">
+                    <Button Content="Keep all"
+                            Command="{Binding KeepAllCurrentGroupCommand}"
+                            Padding="12,6"/>
+                    <Button Content="Previous group"
+                            Command="{Binding PreviousDuplicateGroupCommand}"
+                            Click="OnReviewNavigationClick"
+                            Margin="8,0,0,0"
+                            Padding="12,6"/>
+                    <Button Content="Next group"
+                            Command="{Binding NextDuplicateGroupCommand}"
+                            Click="OnReviewNavigationClick"
+                            Margin="8,0,0,0"
+                            Padding="12,6"/>
+                </StackPanel>
+
+                <Grid Grid.Row="3">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <TextBlock Grid.Row="0"
+                               Text="{Binding CleanupPreviewText}"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,8"/>
+                    <StackPanel Grid.Row="1"
+                                Orientation="Horizontal"
+                                HorizontalAlignment="Right">
+                        <Button Content="Apply cleanup"
+                                Command="{Binding ApplyDuplicateCleanupCommand}"
+                                Padding="12,6"/>
+                        <Button Content="Cancel review"
+                                Command="{Binding CancelDuplicateReviewCommand}"
+                                Margin="8,0,0,0"
+                                Padding="12,6"/>
+                    </StackPanel>
+                </Grid>
+            </Grid>
         </Grid>
 
-        <StackPanel Grid.Row="4" 
-                    Orientation="Horizontal" 
-                    HorizontalAlignment="Right" 
-                    Margin="0,0,0,15">
-            <Button Content="Add Item" 
-                    Command="{Binding AddItemCommand}" 
-                    Margin="0,0,8,0" 
-                    Padding="12,6"
-                    MinHeight="32"/>
-            <Button Content="Remove Selected" 
-                    Command="{Binding RemoveItemCommand}" 
-                    Padding="12,6"
-                    MinHeight="32"/>
-        </StackPanel>
+        <Separator Grid.Row="3" Margin="0,0,0,15"/>
 
-        <Separator Grid.Row="5" Margin="0,0,0,15"/>
-
-        <StackPanel Grid.Row="6" 
-                    Orientation="Horizontal" 
+        <StackPanel Grid.Row="4"
+                    Orientation="Horizontal"
                     HorizontalAlignment="Right">
-            <Button Content="OK" 
-                    IsDefault="True" 
-                    Command="{Binding OkCommand}" 
-                    Margin="0,0,8,0" 
+            <Button Content="OK"
+                    IsDefault="True"
+                    IsEnabled="{Binding IsReviewingDuplicates,
+                                        Converter={StaticResource InverseBooleanConverter}}"
+                    Command="{Binding OkCommand}"
+                    Margin="0,0,8,0"
                     Padding="20,8"
                     MinWidth="100"
                     MinHeight="36"/>
-            <Button Content="Cancel" 
-                    IsCancel="True" 
-                    Command="{Binding CancelCommand}" 
+            <Button Content="Cancel"
+                    IsCancel="True"
+                    Command="{Binding CancelCommand}"
                     Padding="20,8"
                     MinWidth="100"
                     MinHeight="36"/>

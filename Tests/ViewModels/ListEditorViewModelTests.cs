@@ -119,6 +119,7 @@ public class ListEditorViewModelTests
         viewModel.RemoveItemCommand.Execute(null);
 
         Assert.Equal([0, 1], viewModel.Items.Select(item => item.Position));
+        Assert.Equal([1, 2], viewModel.Items.Select(item => item.DisplayPosition));
     }
 
     [Theory]

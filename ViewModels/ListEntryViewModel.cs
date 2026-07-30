@@ -16,6 +16,11 @@ public sealed partial class ListEntryViewModel : ObservableObject
     [ObservableProperty]
     private int position;
 
+    public int DisplayPosition => Position + 1;
+
+    partial void OnPositionChanged(int value) =>
+        OnPropertyChanged(nameof(DisplayPosition));
+
     [ObservableProperty]
     private string value;
 
