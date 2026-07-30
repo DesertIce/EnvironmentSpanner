@@ -120,4 +120,94 @@ public class ListEditorViewModelTests
 
         Assert.Equal([0, 1], viewModel.Items.Select(item => item.Position));
     }
+
+    [Theory]
+    [InlineData(@"C:\Tools", @"C:\Tools", true)]
+    [InlineData(@" C:\Tools ", @"C:\Tools", true)]
+    [InlineData(@"C:\Tools", @"c:\tools", false)]
+    [InlineData(@"C:\Tools", @"C:/Tools", false)]
+    [InlineData(@"C:\Tools", "C:\\Tools\\", false)]
+    public void DuplicateAnalysis_UsesTrimmedOrdinalComparison(
+        string first,
+        string second,
+        bool expectedDuplicate)
+    {
+        var viewModel = new ListEditorViewModel();
+
+        viewModel.Initialize("PATH", $"{first};{second}");
+
+        Assert.Equal(expectedDuplicate, viewModel.HasDuplicates);
+        Assert.Equal(expectedDuplicate, viewModel.Items[0].IsDuplicate);
+        Assert.Equal(expectedDuplicate, viewModel.Items[1].IsDuplicate);
+    }
+
+    [Fact]
+    public void DuplicateAnalysis_DoesNotGroupBlankEntries()
+    {
+        var viewModel = new ListEditorViewModel();
+
+        viewModel.Initialize("TEST", " ; ");
+
+        Assert.False(viewModel.HasDuplicates);
+        Assert.Empty(viewModel.DuplicateGroups);
+    }
+
+    [Fact]
+    public void DuplicateAnalysis_CountsExtraOccurrencesAndGroups()
+    {
+        var viewModel = new ListEditorViewModel();
+
+        viewModel.Initialize("PATH", "One;One;One;Two;Two;Three");
+
+        Assert.Equal(2, viewModel.DuplicateGroupCount);
+        Assert.Equal(3, viewModel.DuplicateEntryCount);
+        Assert.Equal("3 duplicate entries found in 2 groups.", viewModel.DuplicateSummary);
+    }
+
+    [Fact]
+    public void DuplicateSummary_UsesSingularLabels()
+    {
+        var viewModel = new ListEditorViewModel();
+
+        viewModel.Initialize("PATH", "One;One");
+
+        Assert.Equal("1 duplicate entry found in 1 group.", viewModel.DuplicateSummary);
+    }
+
+    [Fact]
+    public void AddItemCommand_ReanalyzesDuplicates()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", string.Empty);
+
+        viewModel.AddItemCommand.Execute(null);
+        viewModel.AddItemCommand.Execute(null);
+
+        Assert.True(viewModel.HasDuplicates);
+    }
+
+    [Fact]
+    public void UpdateItemCommand_ReanalyzesDuplicates()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;Two");
+        viewModel.SelectedItem = viewModel.Items[1];
+        viewModel.EditText = "One";
+
+        viewModel.UpdateItemCommand.Execute(null);
+
+        Assert.True(viewModel.HasDuplicates);
+    }
+
+    [Fact]
+    public void RemoveItemCommand_ReanalyzesDuplicates()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;One");
+        viewModel.SelectedItem = viewModel.Items[1];
+
+        viewModel.RemoveItemCommand.Execute(null);
+
+        Assert.False(viewModel.HasDuplicates);
+    }
 }

@@ -24,6 +24,17 @@ public partial class ListEditorViewModel : ObservableObject
     public ICommand OkCommand { get; set; } = null!;
     public ICommand CancelCommand { get; set; } = null!;
 
+    public ObservableCollection<DuplicateReviewGroupViewModel> DuplicateGroups { get; } = [];
+
+    public bool HasDuplicates => DuplicateGroups.Count > 0;
+    public int DuplicateGroupCount => DuplicateGroups.Count;
+    public int DuplicateEntryCount =>
+        DuplicateGroups.Sum(group => group.Occurrences.Count - 1);
+    public string DuplicateSummary =>
+        $"{DuplicateEntryCount} duplicate " +
+        $"{(DuplicateEntryCount == 1 ? "entry" : "entries")} found in {DuplicateGroupCount} " +
+        $"{(DuplicateGroupCount == 1 ? "group" : "groups")}.";
+
     public void Initialize(string name, string value)
     {
         VariableName = name;
@@ -41,6 +52,7 @@ public partial class ListEditorViewModel : ObservableObject
         }
         
         SelectedItem = Items.FirstOrDefault();
+        AnalyzeDuplicates();
         RemoveItemCommand.NotifyCanExecuteChanged();
     }
 
@@ -49,6 +61,7 @@ public partial class ListEditorViewModel : ObservableObject
     {
         Items.Add(new ListEntryViewModel(_nextEntryId++, Items.Count, "New Item"));
         SelectedItem = Items.LastOrDefault();
+        AnalyzeDuplicates();
         RemoveItemCommand.NotifyCanExecuteChanged();
     }
 
@@ -65,6 +78,7 @@ public partial class ListEditorViewModel : ObservableObject
 
             Items.RemoveAt(index);
             RefreshPositions();
+            AnalyzeDuplicates();
 
             // Select the next item, or previous if at the end, or null if list is empty
             if (Items.Count > 0)
@@ -98,6 +112,7 @@ public partial class ListEditorViewModel : ObservableObject
         {
             SelectedItem.Value = EditText;
             EditText = SelectedItem.Value;
+            AnalyzeDuplicates();
         }
     }
 
@@ -115,5 +130,36 @@ public partial class ListEditorViewModel : ObservableObject
         {
             Items[index].Position = index;
         }
+    }
+
+    private void AnalyzeDuplicates()
+    {
+        DuplicateGroups.Clear();
+
+        foreach (var item in Items)
+        {
+            item.IsDuplicate = false;
+        }
+
+        var groups = Items
+            .Where(item => !string.IsNullOrWhiteSpace(item.Value))
+            .GroupBy(item => item.Value.Trim(), StringComparer.Ordinal)
+            .Where(group => group.Count() > 1);
+
+        foreach (var group in groups)
+        {
+            var entries = group.OrderBy(item => item.Position).ToArray();
+            foreach (var entry in entries)
+            {
+                entry.IsDuplicate = true;
+            }
+
+            DuplicateGroups.Add(new DuplicateReviewGroupViewModel(group.Key, entries));
+        }
+
+        OnPropertyChanged(nameof(HasDuplicates));
+        OnPropertyChanged(nameof(DuplicateGroupCount));
+        OnPropertyChanged(nameof(DuplicateEntryCount));
+        OnPropertyChanged(nameof(DuplicateSummary));
     }
 }
