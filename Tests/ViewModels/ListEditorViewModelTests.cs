@@ -17,9 +17,7 @@ public class ListEditorViewModelTests
 
         // Assert
         Assert.Equal(3, viewModel.Items.Count);
-        Assert.Contains("Item1", viewModel.Items);
-        Assert.Contains("Item2", viewModel.Items);
-        Assert.Contains("Item3", viewModel.Items);
+        Assert.Equal(["Item1", "Item2", "Item3"], viewModel.Items.Select(item => item.Value));
     }
 
     [Fact]
@@ -69,13 +67,57 @@ public class ListEditorViewModelTests
         // Arrange
         var viewModel = new ListEditorViewModel();
         viewModel.Initialize("TEST_VAR", "Item1;Item2;Item3");
-        viewModel.SelectedItem = "Item2";
+        viewModel.SelectedItem = viewModel.Items[1];
 
         // Act
         viewModel.RemoveItemCommand.Execute(null);
 
         // Assert
         Assert.Equal(2, viewModel.Items.Count);
-        Assert.DoesNotContain("Item2", viewModel.Items);
+        Assert.DoesNotContain(viewModel.Items, item => item.Value == "Item2");
+    }
+
+    [Fact]
+    public void RemoveItemCommand_WithSecondEqualEntry_RemovesSelectedInstance()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", @"C:\One;C:\One;C:\Two");
+        var first = viewModel.Items[0];
+        var second = viewModel.Items[1];
+        viewModel.SelectedItem = second;
+
+        viewModel.RemoveItemCommand.Execute(null);
+
+        Assert.Equal(2, viewModel.Items.Count);
+        Assert.Same(first, viewModel.Items[0]);
+        Assert.DoesNotContain(viewModel.Items, item => ReferenceEquals(item, second));
+    }
+
+    [Fact]
+    public void UpdateItemCommand_WithSecondEqualEntry_UpdatesSelectedInstance()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", @"C:\One;C:\One;C:\Two");
+        var first = viewModel.Items[0];
+        var second = viewModel.Items[1];
+        viewModel.SelectedItem = second;
+        viewModel.EditText = @"C:\Updated";
+
+        viewModel.UpdateItemCommand.Execute(null);
+
+        Assert.Equal(@"C:\One", first.Value);
+        Assert.Equal(@"C:\Updated", second.Value);
+    }
+
+    [Fact]
+    public void EntryPositions_RefreshAfterRemoval()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;Two;Three");
+        viewModel.SelectedItem = viewModel.Items[1];
+
+        viewModel.RemoveItemCommand.Execute(null);
+
+        Assert.Equal([0, 1], viewModel.Items.Select(item => item.Position));
     }
 }

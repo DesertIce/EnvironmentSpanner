@@ -50,10 +50,10 @@
                      ScrollViewer.VerticalScrollBarVisibility="Auto">
                 <ListBox.ItemTemplate>
                     <DataTemplate>
-                        <TextBlock Text="{Binding}" 
+                        <TextBlock Text="{Binding Value}"
                                    TextWrapping="NoWrap"
                                    TextTrimming="CharacterEllipsis"
-                                   ToolTip="{Binding}"/>
+                                   ToolTip="{Binding Value}"/>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
