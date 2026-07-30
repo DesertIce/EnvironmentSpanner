@@ -210,4 +210,130 @@ public class ListEditorViewModelTests
 
         Assert.False(viewModel.HasDuplicates);
     }
+
+    [Fact]
+    public void ReviewDuplicatesCommand_StartsWithFirstGroupAndDefaultRemovals()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;One;Two;Two;Two");
+
+        viewModel.ReviewDuplicatesCommand.Execute(null);
+
+        Assert.True(viewModel.IsReviewingDuplicates);
+        Assert.Equal(0, viewModel.CurrentDuplicateGroupIndex);
+        Assert.Equal("Group 1 of 2", viewModel.ReviewProgressText);
+        Assert.False(viewModel.CurrentDuplicateGroup!.Occurrences[0].IsMarkedForRemoval);
+        Assert.True(viewModel.CurrentDuplicateGroup.Occurrences[1].IsMarkedForRemoval);
+    }
+
+    [Fact]
+    public void DuplicateGroupNavigation_MovesWithoutChangingItems()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;One;Two;Two");
+        var originalIds = viewModel.Items.Select(item => item.Id).ToArray();
+        viewModel.ReviewDuplicatesCommand.Execute(null);
+
+        viewModel.NextDuplicateGroupCommand.Execute(null);
+
+        Assert.Equal(1, viewModel.CurrentDuplicateGroupIndex);
+        Assert.Equal("Group 2 of 2", viewModel.ReviewProgressText);
+        Assert.Equal(originalIds, viewModel.Items.Select(item => item.Id));
+    }
+
+    [Fact]
+    public void KeepAllCurrentGroupCommand_ClearsProposedRemovals()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;One;One");
+        viewModel.ReviewDuplicatesCommand.Execute(null);
+
+        viewModel.KeepAllCurrentGroupCommand.Execute(null);
+
+        Assert.All(
+            viewModel.CurrentDuplicateGroup!.Occurrences,
+            item => Assert.False(item.IsMarkedForRemoval));
+    }
+
+    [Fact]
+    public void ToggleReviewRemovalCommand_DoesNotAllowRemovingEntireGroup()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;One");
+        viewModel.ReviewDuplicatesCommand.Execute(null);
+        var retained = viewModel.CurrentDuplicateGroup!.Occurrences[0];
+
+        viewModel.ToggleReviewRemovalCommand.Execute(retained);
+
+        Assert.False(retained.IsMarkedForRemoval);
+        Assert.Equal(
+            "At least one occurrence must be kept.",
+            viewModel.ReviewConstraintMessage);
+    }
+
+    [Fact]
+    public void CancelDuplicateReviewCommand_DiscardsSelectionsWithoutChangingItems()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;One;Two");
+        var originalIds = viewModel.Items.Select(item => item.Id).ToArray();
+        viewModel.ReviewDuplicatesCommand.Execute(null);
+        viewModel.KeepAllCurrentGroupCommand.Execute(null);
+
+        viewModel.CancelDuplicateReviewCommand.Execute(null);
+
+        Assert.False(viewModel.IsReviewingDuplicates);
+        Assert.Equal(originalIds, viewModel.Items.Select(item => item.Id));
+    }
+
+    [Fact]
+    public void ReviewDuplicatesCommand_WithNoDuplicates_CannotExecute()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;Two");
+
+        Assert.False(viewModel.ReviewDuplicatesCommand.CanExecute(null));
+    }
+
+    [Fact]
+    public void CleanupPreview_UpdatesAfterKeepAll()
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;One;Two;Two;Two");
+        viewModel.ReviewDuplicatesCommand.Execute(null);
+
+        viewModel.KeepAllCurrentGroupCommand.Execute(null);
+
+        Assert.Equal(2, viewModel.PendingRemovalCount);
+        Assert.Equal(
+            "Remove 2 entries from 1 group. The list will contain 3 entries instead of 5.",
+            viewModel.CleanupPreviewText);
+    }
+
+    [Theory]
+    [InlineData("add")]
+    [InlineData("update")]
+    [InlineData("remove")]
+    public void OrdinaryMutation_CancelsActiveDuplicateReview(string mutation)
+    {
+        var viewModel = new ListEditorViewModel();
+        viewModel.Initialize("PATH", "One;One;Two");
+        viewModel.ReviewDuplicatesCommand.Execute(null);
+
+        switch (mutation)
+        {
+            case "add":
+                viewModel.AddItemCommand.Execute(null);
+                break;
+            case "update":
+                viewModel.EditText = "Changed";
+                viewModel.UpdateItemCommand.Execute(null);
+                break;
+            case "remove":
+                viewModel.RemoveItemCommand.Execute(null);
+                break;
+        }
+
+        Assert.False(viewModel.IsReviewingDuplicates);
+    }
 }

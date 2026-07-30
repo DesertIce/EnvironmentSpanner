@@ -35,6 +35,41 @@ public partial class ListEditorViewModel : ObservableObject
         $"{(DuplicateEntryCount == 1 ? "entry" : "entries")} found in {DuplicateGroupCount} " +
         $"{(DuplicateGroupCount == 1 ? "group" : "groups")}.";
 
+    [ObservableProperty]
+    private bool isReviewingDuplicates;
+
+    [ObservableProperty]
+    private int currentDuplicateGroupIndex = -1;
+
+    [ObservableProperty]
+    private DuplicateReviewGroupViewModel? currentDuplicateGroup;
+
+    [ObservableProperty]
+    private string reviewConstraintMessage = string.Empty;
+
+    public string ReviewProgressText =>
+        CurrentDuplicateGroup is null
+            ? string.Empty
+            : $"Group {CurrentDuplicateGroupIndex + 1} of {DuplicateGroupCount}";
+
+    public int PendingRemovalCount =>
+        DuplicateGroups.Sum(group => group.ProposedRemovalCount);
+
+    public string CleanupPreviewText
+    {
+        get
+        {
+            var affectedGroupCount =
+                DuplicateGroups.Count(group => group.ProposedRemovalCount > 0);
+            return $"Remove {PendingRemovalCount} " +
+                   $"{(PendingRemovalCount == 1 ? "entry" : "entries")} from " +
+                   $"{affectedGroupCount} " +
+                   $"{(affectedGroupCount == 1 ? "group" : "groups")}. " +
+                   $"The list will contain {Items.Count - PendingRemovalCount} entries " +
+                   $"instead of {Items.Count}.";
+        }
+    }
+
     public void Initialize(string name, string value)
     {
         VariableName = name;
@@ -59,6 +94,11 @@ public partial class ListEditorViewModel : ObservableObject
     [RelayCommand]
     private void AddItem()
     {
+        if (IsReviewingDuplicates)
+        {
+            CancelDuplicateReview();
+        }
+
         Items.Add(new ListEntryViewModel(_nextEntryId++, Items.Count, "New Item"));
         SelectedItem = Items.LastOrDefault();
         AnalyzeDuplicates();
@@ -68,6 +108,11 @@ public partial class ListEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanRemoveItem))]
     private void RemoveItem()
     {
+        if (IsReviewingDuplicates)
+        {
+            CancelDuplicateReview();
+        }
+
         if (SelectedItem is not null)
         {
             var index = Items.IndexOf(SelectedItem);
@@ -108,6 +153,11 @@ public partial class ListEditorViewModel : ObservableObject
     [RelayCommand(CanExecute = nameof(CanUpdateItem))]
     private void UpdateItem()
     {
+        if (IsReviewingDuplicates)
+        {
+            CancelDuplicateReview();
+        }
+
         if (SelectedItem is not null && !string.IsNullOrWhiteSpace(EditText))
         {
             SelectedItem.Value = EditText;
@@ -117,6 +167,88 @@ public partial class ListEditorViewModel : ObservableObject
     }
 
     private bool CanUpdateItem() => SelectedItem != null && !string.IsNullOrWhiteSpace(EditText);
+
+    [RelayCommand(CanExecute = nameof(CanReviewDuplicates))]
+    private void ReviewDuplicates()
+    {
+        IsReviewingDuplicates = true;
+        CurrentDuplicateGroupIndex = 0;
+        CurrentDuplicateGroup = DuplicateGroups[0];
+        ReviewConstraintMessage = string.Empty;
+        NotifyReviewStateChanged();
+    }
+
+    private bool CanReviewDuplicates() => HasDuplicates && !IsReviewingDuplicates;
+
+    [RelayCommand(CanExecute = nameof(CanGoToPreviousDuplicateGroup))]
+    private void PreviousDuplicateGroup()
+    {
+        CurrentDuplicateGroupIndex--;
+        CurrentDuplicateGroup = DuplicateGroups[CurrentDuplicateGroupIndex];
+        ReviewConstraintMessage = string.Empty;
+        NotifyReviewStateChanged();
+    }
+
+    private bool CanGoToPreviousDuplicateGroup() =>
+        IsReviewingDuplicates && CurrentDuplicateGroupIndex > 0;
+
+    [RelayCommand(CanExecute = nameof(CanGoToNextDuplicateGroup))]
+    private void NextDuplicateGroup()
+    {
+        CurrentDuplicateGroupIndex++;
+        CurrentDuplicateGroup = DuplicateGroups[CurrentDuplicateGroupIndex];
+        ReviewConstraintMessage = string.Empty;
+        NotifyReviewStateChanged();
+    }
+
+    private bool CanGoToNextDuplicateGroup() =>
+        IsReviewingDuplicates &&
+        CurrentDuplicateGroupIndex < DuplicateGroupCount - 1;
+
+    [RelayCommand]
+    private void ToggleReviewRemoval(DuplicateReviewItemViewModel item)
+    {
+        if (!item.IsMarkedForRemoval &&
+            CurrentDuplicateGroup is not null &&
+            CurrentDuplicateGroup.Occurrences.Count(
+                occurrence => !occurrence.IsMarkedForRemoval) == 1)
+        {
+            ReviewConstraintMessage = "At least one occurrence must be kept.";
+            return;
+        }
+
+        item.IsMarkedForRemoval = !item.IsMarkedForRemoval;
+        ReviewConstraintMessage = string.Empty;
+        NotifyReviewStateChanged();
+    }
+
+    [RelayCommand]
+    private void KeepAllCurrentGroup()
+    {
+        if (CurrentDuplicateGroup is null)
+        {
+            return;
+        }
+
+        foreach (var item in CurrentDuplicateGroup.Occurrences)
+        {
+            item.IsMarkedForRemoval = false;
+        }
+
+        ReviewConstraintMessage = string.Empty;
+        NotifyReviewStateChanged();
+    }
+
+    [RelayCommand]
+    private void CancelDuplicateReview()
+    {
+        IsReviewingDuplicates = false;
+        CurrentDuplicateGroupIndex = -1;
+        CurrentDuplicateGroup = null;
+        ReviewConstraintMessage = string.Empty;
+        AnalyzeDuplicates();
+        NotifyReviewStateChanged();
+    }
 
     public void Cancel() => Initialize(VariableName, _originalValue);
 
@@ -161,5 +293,16 @@ public partial class ListEditorViewModel : ObservableObject
         OnPropertyChanged(nameof(DuplicateGroupCount));
         OnPropertyChanged(nameof(DuplicateEntryCount));
         OnPropertyChanged(nameof(DuplicateSummary));
+        ReviewDuplicatesCommand.NotifyCanExecuteChanged();
+    }
+
+    private void NotifyReviewStateChanged()
+    {
+        OnPropertyChanged(nameof(ReviewProgressText));
+        OnPropertyChanged(nameof(PendingRemovalCount));
+        OnPropertyChanged(nameof(CleanupPreviewText));
+        ReviewDuplicatesCommand.NotifyCanExecuteChanged();
+        PreviousDuplicateGroupCommand.NotifyCanExecuteChanged();
+        NextDuplicateGroupCommand.NotifyCanExecuteChanged();
     }
 }
