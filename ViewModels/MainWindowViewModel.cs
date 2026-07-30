@@ -39,6 +39,8 @@ public partial class MainWindowViewModel : ObservableObject
     private ObservableCollection<EnvironmentVariableViewModel> _originalUserVariables = new();
     private ObservableCollection<EnvironmentVariableViewModel> _originalSystemVariables = new();
 
+    public Task Initialization { get; }
+
     public MainWindowViewModel(IEnvironmentVariableService service, ILogger<MainWindowViewModel> logger)
     {
         try
@@ -57,7 +59,7 @@ public partial class MainWindowViewModel : ObservableObject
             _logger.LogInformation("System read-only status: {IsSystemReadOnly}", IsSystemReadOnly);
             
             _logger.LogInformation("Loading environment variables");
-            _ = LoadVariablesAsync();
+            Initialization = LoadVariablesAsync();
             _logger.LogInformation("MainWindowViewModel constructor completed successfully");
         }
         catch (Exception ex)
@@ -79,8 +81,7 @@ public partial class MainWindowViewModel : ObservableObject
             var systemVars = await Task.Run(() => 
                 _service.GetEnvironmentVariables(EnvironmentVariableTarget.Machine).ToList());
             
-            // Update UI on UI thread
-            await Application.Current.Dispatcher.InvokeAsync(() =>
+            await RunOnUiThreadAsync(() =>
             {
                 UserVariables.Clear();
                 foreach (var variable in userVars.OrderBy(v => v.Name))
@@ -121,6 +122,17 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    private static async Task RunOnUiThreadAsync(Action action)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher is null || dispatcher.CheckAccess())
+        {
+            action();
+            return;
+        }
+
+        await dispatcher.InvokeAsync(action);
+    }
 
     private void SaveOriginalState()
     {

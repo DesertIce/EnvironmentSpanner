@@ -1,5 +1,6 @@
 using System;
 using System.Linq;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using EnvironmentSpanner.Models;
@@ -22,7 +23,7 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void Constructor_InitializesCollections()
+    public async Task Constructor_InitializesCollections()
     {
         // Arrange
         var mockService = new Mock<IEnvironmentVariableService>();
@@ -33,6 +34,7 @@ public class MainWindowViewModelTests
 
         // Act
         var viewModel = serviceProvider.GetRequiredService<MainWindowViewModel>();
+        await viewModel.Initialization;
 
         // Assert
         Assert.NotNull(viewModel.UserVariables);
@@ -42,7 +44,7 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void IsElevated_True_SetsSystemReadOnlyToFalse()
+    public async Task IsElevated_True_SetsSystemReadOnlyToFalse()
     {
         // Arrange
         var mockService = new Mock<IEnvironmentVariableService>();
@@ -53,6 +55,7 @@ public class MainWindowViewModelTests
 
         // Act
         var viewModel = serviceProvider.GetRequiredService<MainWindowViewModel>();
+        await viewModel.Initialization;
 
         // Assert
         Assert.True(viewModel.IsElevated);
@@ -60,7 +63,7 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void AddVariableCommand_UserTab_AddsToUserVariables()
+    public async Task AddVariableCommand_UserTab_AddsToUserVariables()
     {
         // Arrange
         var mockService = new Mock<IEnvironmentVariableService>();
@@ -69,6 +72,7 @@ public class MainWindowViewModelTests
         mockService.Setup(s => s.IsElevated()).Returns(false);
         var serviceProvider = CreateServiceProvider(mockService);
         var viewModel = serviceProvider.GetRequiredService<MainWindowViewModel>();
+        await viewModel.Initialization;
         viewModel.SelectedTabIndex = 0; // User tab
 
         // Act
@@ -80,7 +84,7 @@ public class MainWindowViewModelTests
     }
 
     [Fact]
-    public void SaveCommand_WithChanges_CallsService()
+    public async Task SaveCommand_WithChanges_CallsService()
     {
         // Arrange
         var mockService = new Mock<IEnvironmentVariableService>();
@@ -89,20 +93,21 @@ public class MainWindowViewModelTests
         mockService.Setup(s => s.IsElevated()).Returns(false);
         var serviceProvider = CreateServiceProvider(mockService);
         var viewModel = serviceProvider.GetRequiredService<MainWindowViewModel>();
+        await viewModel.Initialization;
         viewModel.SelectedTabIndex = 0;
         viewModel.AddVariableCommand.Execute(null);
         viewModel.UserVariables[0].Name = "TEST_VAR";
         viewModel.UserVariables[0].Value = "TestValue";
 
         // Act
-        viewModel.SaveCommand.Execute(null);
+        await viewModel.SaveCommand.ExecuteAsync(null);
 
         // Assert
         mockService.Verify(s => s.SetEnvironmentVariable("TEST_VAR", "TestValue", EnvironmentVariableTarget.User), Times.Once);
     }
 
     [Fact]
-    public void SaveCommand_SystemVariables_OnlySavesWhenElevated()
+    public async Task SaveCommand_SystemVariables_OnlySavesWhenElevated()
     {
         // Arrange - not elevated
         var mockService = new Mock<IEnvironmentVariableService>();
@@ -111,20 +116,21 @@ public class MainWindowViewModelTests
         mockService.Setup(s => s.IsElevated()).Returns(false);
         var serviceProvider = CreateServiceProvider(mockService);
         var viewModel = serviceProvider.GetRequiredService<MainWindowViewModel>();
+        await viewModel.Initialization;
         viewModel.SelectedTabIndex = 1; // System tab
         viewModel.AddVariableCommand.Execute(null);
         viewModel.SystemVariables[0].Name = "TEST_SYSTEM_VAR";
         viewModel.SystemVariables[0].Value = "TestValue";
 
         // Act
-        viewModel.SaveCommand.Execute(null);
+        await viewModel.SaveCommand.ExecuteAsync(null);
 
         // Assert - should not save system variables when not elevated
         mockService.Verify(s => s.SetEnvironmentVariable(It.IsAny<string>(), It.IsAny<string>(), EnvironmentVariableTarget.Machine), Times.Never);
     }
 
     [Fact]
-    public void SaveCommand_SystemVariables_SavesWhenElevated()
+    public async Task SaveCommand_SystemVariables_SavesWhenElevated()
     {
         // Arrange - elevated
         var mockService = new Mock<IEnvironmentVariableService>();
@@ -133,20 +139,21 @@ public class MainWindowViewModelTests
         mockService.Setup(s => s.IsElevated()).Returns(true);
         var serviceProvider = CreateServiceProvider(mockService);
         var viewModel = serviceProvider.GetRequiredService<MainWindowViewModel>();
+        await viewModel.Initialization;
         viewModel.SelectedTabIndex = 1; // System tab
         viewModel.AddVariableCommand.Execute(null);
         viewModel.SystemVariables[0].Name = "TEST_SYSTEM_VAR";
         viewModel.SystemVariables[0].Value = "TestValue";
 
         // Act
-        viewModel.SaveCommand.Execute(null);
+        await viewModel.SaveCommand.ExecuteAsync(null);
 
         // Assert - should save system variables when elevated
         mockService.Verify(s => s.SetEnvironmentVariable("TEST_SYSTEM_VAR", "TestValue", EnvironmentVariableTarget.Machine), Times.Once);
     }
 
     [Fact]
-    public void SaveCommand_OnlySavesModifiedEntries()
+    public async Task SaveCommand_OnlySavesModifiedEntries()
     {
         // Arrange
         var existingVar = new EnvironmentVariable
@@ -163,13 +170,14 @@ public class MainWindowViewModelTests
         mockService.Setup(s => s.IsElevated()).Returns(false);
         var serviceProvider = CreateServiceProvider(mockService);
         var viewModel = serviceProvider.GetRequiredService<MainWindowViewModel>();
+        await viewModel.Initialization;
         
         // Find the existing variable and modify it
         var existingVm = viewModel.UserVariables.First(v => v.Name == "EXISTING_VAR");
         existingVm.Value = "ModifiedValue";
 
         // Act
-        viewModel.SaveCommand.Execute(null);
+        await viewModel.SaveCommand.ExecuteAsync(null);
 
         // Assert - should only save the modified variable, not unchanged ones
         mockService.Verify(s => s.SetEnvironmentVariable("EXISTING_VAR", "ModifiedValue", EnvironmentVariableTarget.User), Times.Once);
